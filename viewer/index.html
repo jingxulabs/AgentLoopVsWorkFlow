@@ -1,0 +1,1006 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent loop vs workflow — HotpotQA</title>
+<style>
+  /* Palette roles. Dark values are declared under both the OS media query and
+     the explicit theme stamp so the toggle wins either way. */
+  .viz-root {
+    color-scheme: light;
+    --surface-1: #fcfcfb;
+    --plane: #f9f9f7;
+    --text-primary: #0b0b0b;
+    --text-secondary: #52514e;
+    --muted: #898781;
+    --grid: #e1e0d9;
+    --axis: #c3c2b7;
+    --border: rgba(11,11,11,0.10);
+    --series-1: #2a78d6;  /* workflow */
+    --series-2: #eb6834;  /* react    */
+    --series-3: #1baf7a;  /* hybrid   */
+    --good: #0ca30c; --warning: #fab219; --serious: #ec835a; --critical: #d03b3b;
+    --seq-250: #86b6ef; --seq-450: #2a78d6; --seq-650: #104281;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) .viz-root {
+      color-scheme: dark;
+      --surface-1: #1a1a19; --plane: #0d0d0d;
+      --text-primary: #f0efec; --text-secondary: #c3c2b7; --muted: #898781;
+      --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
+      --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70;
+      --seq-250: #184f95; --seq-450: #3987e5; --seq-650: #cde2fb;
+    }
+  }
+  :root[data-theme="dark"] .viz-root {
+    color-scheme: dark;
+    --surface-1: #1a1a19; --plane: #0d0d0d;
+    --text-primary: #f0efec; --text-secondary: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
+    --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70;
+    --seq-250: #184f95; --seq-450: #3987e5; --seq-650: #cde2fb;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--plane); color: var(--text-primary);
+    font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 32px 24px 80px; }
+  header.page { display: flex; align-items: flex-start; gap: 24px; margin-bottom: 8px; }
+  header.page h1 { font-size: 24px; font-weight: 650; margin: 0 0 4px; letter-spacing: -0.01em; }
+  .sub { color: var(--text-secondary); font-size: 13px; }
+  .spacer { flex: 1; }
+  .controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  button.ctl {
+    font: inherit; font-size: 12px; padding: 6px 12px; border-radius: 7px;
+    border: 1px solid var(--border); background: var(--surface-1);
+    color: var(--text-secondary); cursor: pointer;
+  }
+  button.ctl:hover { color: var(--text-primary); }
+  button.ctl[aria-pressed="true"] { color: var(--text-primary); font-weight: 600; border-color: var(--axis); }
+
+  .banner {
+    background: var(--surface-1); border: 1px solid var(--border);
+    border-left: 3px solid var(--warning);
+    border-radius: 8px; padding: 10px 14px; margin: 16px 0; font-size: 13px;
+    color: var(--text-secondary);
+  }
+  .banner strong { color: var(--text-primary); }
+
+  section { margin-top: 36px; }
+  section > h2 {
+    font-size: 15px; font-weight: 620; margin: 0 0 2px; letter-spacing: -0.005em;
+  }
+  section > p.note { color: var(--text-secondary); font-size: 13px; margin: 0 0 14px; max-width: 78ch; }
+
+  .card {
+    background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: 10px; padding: 18px 20px 14px;
+  }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 860px) { .grid2 { grid-template-columns: 1fr; } }
+
+  /* KPI row */
+  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  @media (max-width: 860px) { .kpis { grid-template-columns: repeat(2, 1fr); } }
+  .kpi { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; }
+  .kpi .label { font-size: 11.5px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; }
+  .kpi .value { font-size: 30px; font-weight: 640; margin: 6px 0 2px; letter-spacing: -0.02em; }
+  .kpi .cmp { font-size: 12px; color: var(--text-secondary); }
+
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; margin: 0 0 10px; font-size: 12.5px; color: var(--text-secondary); }
+  .legend .item { display: flex; align-items: center; gap: 6px; }
+  .swatch { width: 11px; height: 11px; border-radius: 3px; flex: none; }
+
+  svg { display: block; width: 100%; height: auto; overflow: visible; }
+  .tick { fill: var(--muted); font-size: 11px; }
+  .tick.tab { font-variant-numeric: tabular-nums; }
+  .glabel { fill: var(--text-secondary); font-size: 12px; }
+  .dlabel { fill: var(--text-secondary); font-size: 10.5px; font-variant-numeric: tabular-nums; }
+  .axis-line { stroke: var(--axis); stroke-width: 1; }
+  .grid-line { stroke: var(--grid); stroke-width: 1; }
+  .hit { fill: transparent; cursor: pointer; }
+
+  table.data { border-collapse: collapse; width: 100%; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+  table.data th, table.data td { text-align: right; padding: 6px 10px; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+  table.data th:first-child, table.data td:first-child,
+  table.data th:nth-child(2), table.data td:nth-child(2) { text-align: left; }
+  table.data th { color: var(--text-secondary); font-weight: 600; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.03em; }
+  table.data tbody tr:hover { background: var(--plane); }
+
+  /* trace explorer */
+  .traces { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  @media (max-width: 980px) { .traces { grid-template-columns: 1fr; } }
+  .tracecol { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .tracehead { padding: 11px 14px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; }
+  .tracehead .nm { font-weight: 620; font-size: 13px; }
+  .tracehead .meta { margin-left: auto; font-size: 11.5px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+  .step { padding: 10px 14px; border-bottom: 1px solid var(--grid); font-size: 12px; }
+  .step:last-child { border-bottom: 0; }
+  .step .lbl { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin-bottom: 3px; }
+  .step .th { color: var(--text-secondary); font-style: italic; margin-bottom: 3px; }
+  .step .ac { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; color: var(--text-primary); word-break: break-word; }
+  .step .ob { color: var(--text-secondary); margin-top: 3px; max-height: 4.5em; overflow: hidden; }
+  .step .nt { margin-top: 4px; font-size: 11px; color: var(--critical); }
+  .verdict { padding: 10px 14px; font-size: 12px; display: flex; gap: 8px; align-items: baseline; }
+  .pill { font-size: 10.5px; padding: 2px 7px; border-radius: 99px; font-weight: 650; color: #fff; }
+  select.ctl { font: inherit; font-size: 12px; padding: 6px 10px; border-radius: 7px; border: 1px solid var(--border); background: var(--surface-1); color: var(--text-primary); max-width: 100%; }
+
+  #tip {
+    position: fixed; pointer-events: none; opacity: 0; transition: opacity .08s;
+    background: var(--surface-1); color: var(--text-primary);
+    border: 1px solid var(--axis); border-radius: 8px; padding: 8px 10px;
+    font-size: 12px; box-shadow: 0 4px 16px rgba(0,0,0,.14); z-index: 50;
+    max-width: 280px;
+  }
+  #tip .tt { font-weight: 650; margin-bottom: 3px; }
+  #tip .tr { color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+  .hidden { display: none !important; }
+  code.k { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px;
+           background: var(--plane); padding: 1px 5px; border-radius: 4px; border: 1px solid var(--border); }
+</style>
+</head>
+<body class="viz-root">
+<div class="wrap">
+
+<header class="page">
+  <div>
+    <h1>Agent loop vs. workflow</h1>
+    <div class="sub" id="meta">loading…</div>
+  </div>
+  <div class="spacer"></div>
+  <div class="controls">
+    <button class="ctl" id="tableToggle" aria-pressed="false">Table view</button>
+    <button class="ctl" id="themeToggle" aria-pressed="false">Dark</button>
+  </div>
+</header>
+
+<div class="banner" id="loadErr" hidden></div>
+<div class="banner" id="pricingNote" hidden></div>
+
+<section id="kpiSection">
+  <h2>Headline</h2>
+  <p class="note">
+    The decision metric is <strong>cost per correct answer</strong>, not accuracy. An
+    architecture that buys a few points of EM for several times the tokens is a
+    different call at 100 questions/day than at 10 million.
+  </p>
+  <div class="kpis" id="kpis"></div>
+</section>
+
+<section>
+  <h2>Performance by architecture</h2>
+  <p class="note">
+    One row per option, rolled up across every condition (each carries equal n,
+    so conditions are weighted equally). <strong>tail</strong> is p95 ÷ mean
+    tokens — how far the expensive runs sit from the typical one.
+    <strong>cost CV</strong> is the coefficient of variation: lower means more
+    forecastable. <strong>s/call</strong> is median per-call latency, which is
+    the latency figure that isn't swamped by gateway tail.
+  </p>
+  <div class="card" style="overflow-x:auto"><div id="armHost"></div></div>
+</section>
+
+<section>
+  <h2>Accuracy by condition</h2>
+  <p class="note">
+    Exact match on HotpotQA dev-distractor. The <code class="k">clean</code> column is
+    the one where a fixed pipeline is supposed to look good — the shape of the graph
+    matches the shape of the task. Everything to its right perturbs that assumption.
+  </p>
+  <div class="card"><div id="chartEM"></div></div>
+</section>
+
+<section class="grid2">
+  <div>
+    <h2>Tokens per question</h2>
+    <p class="note">Mean, with the p95 marked as a tick. The gap between them is the tail.</p>
+    <div class="card"><div id="chartTokens"></div></div>
+  </div>
+  <div>
+    <h2>Cost per correct answer</h2>
+    <p class="note">Total spend over answers actually gotten right. Lower is better.</p>
+    <div class="card"><div id="chartCPC"></div></div>
+  </div>
+</section>
+
+<section>
+  <h2>Where the cost variance lives</h2>
+  <p class="note">
+    Distribution of LLM calls per question. This is the plot that most separates the
+    two architectures: the workflow is a near point mass — you can put it in an SLA —
+    while the loop spreads, because the model decides when to stop.
+  </p>
+  <div class="card"><div id="chartDist"></div></div>
+</section>
+
+<section class="grid2">
+  <div>
+    <h2>Cost–accuracy frontier</h2>
+    <p class="note">One point per arm × condition. Up and to the left is better.</p>
+    <div class="card"><div id="chartFrontier"></div></div>
+  </div>
+  <div>
+    <h2>How runs ended</h2>
+    <p class="note">
+      Failure modes are not symmetric. A loop can fail to terminate; a DAG cannot.
+      A DAG can only fail by answering confidently from bad context.
+    </p>
+    <div class="card"><div id="chartTerm"></div></div>
+  </div>
+</section>
+
+<section>
+  <h2>Head-to-head on identical questions</h2>
+  <p class="note">
+    Every arm saw the same questions, so they can be compared pair by pair rather
+    than mean against mean. <strong>Two arms can post the same accuracy while
+    disagreeing on half the questions</strong> — that means different
+    competencies, not equivalent ones, and an average erases it. Bars show only
+    the questions where the two arms disagreed; <em>p</em> is an exact McNemar
+    test on those discordant pairs.
+  </p>
+  <div class="card"><div id="chartH2H"></div></div>
+</section>
+
+<section id="qtypeSection">
+  <h2>Accuracy by question type</h2>
+  <p class="note">
+    A fixed 2-hop graph is a bet that every question bridges through an
+    intermediate entity. <code class="k">comparison</code> questions don't — they
+    need two independent lookups — so this is where a fixed shape should cost
+    accuracy outright.
+  </p>
+  <div class="card" style="overflow-x:auto"><div id="qtypeHost"></div></div>
+</section>
+
+<section id="tableSection" class="hidden">
+  <h2>All cells</h2>
+  <p class="note">
+    The full table — also the accessibility fallback for the charts above.
+    <strong>Read <code class="k">lat p95</code> with care:</strong> on this gateway
+    ~7% of calls hit a ~48s cliff regardless of arm, so the p95 columns measure
+    gateway tail, not control flow. The architecture-attributable part of latency
+    is <code class="k">LLM calls</code>, since per-call p50 is ~1s for every arm.
+  </p>
+  <div class="card" style="overflow-x:auto"><div id="tableHost"></div></div>
+</section>
+
+<section>
+  <h2>Trace explorer</h2>
+  <p class="note">
+    The same question, run through each architecture. This is where the aggregate
+    numbers become legible: you can see the loop spend a step recovering from a 503
+    that the workflow silently absorbed as a missing paragraph.
+  </p>
+  <div class="controls" style="margin-bottom:14px">
+    <select class="ctl" id="condPick"></select>
+    <select class="ctl" id="qPick" style="flex:1; min-width:280px"></select>
+  </div>
+  <div class="traces" id="traces"></div>
+</section>
+
+</div>
+<div id="tip"></div>
+
+<script>
+const ARM_SLOT = { workflow: 1, react: 2, hybrid: 3 };
+const ARM_ORDER = ["workflow", "react", "hybrid"];
+const TERM_STYLE = {
+  answered:   { color: "var(--good)",     label: "answered",    mark: "✓" },
+  budget:     { color: "var(--warning)",  label: "budget hit",  mark: "◑" },
+  step_limit: { color: "var(--serious)",  label: "step limit",  mark: "∞" },
+  malformed:  { color: "var(--critical)", label: "malformed",   mark: "✗" },
+  error:      { color: "var(--muted)",    label: "error",       mark: "!" },
+};
+const armColor = a => `var(--series-${ARM_SLOT[a] || 1})`;
+const SVGNS = "http://www.w3.org/2000/svg";
+
+let SUMMARY = null, RUNS = null;
+
+// ---------- tiny svg helpers ----------
+function el(name, attrs = {}, parent = null) {
+  const n = document.createElementNS(SVGNS, name);
+  for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
+  if (parent) parent.appendChild(n);
+  return n;
+}
+function svgRoot(host, w, h) {
+  host.innerHTML = "";
+  const s = el("svg", { viewBox: `0 0 ${w} ${h}`, role: "img" });
+  host.appendChild(s);
+  return s;
+}
+/** Bar with only its data-end rounded (4px), anchored flat to the baseline. */
+function barPath(x, y, w, h, r = 4) {
+  if (h <= 0.5) return `M${x},${y + h}h${w}`;
+  const rr = Math.min(r, w / 2, h);
+  return `M${x},${y + h}V${y + rr}a${rr},${rr} 0 0 1 ${rr},-${rr}h${w - 2 * rr}a${rr},${rr} 0 0 1 ${rr},${rr}V${y + h}Z`;
+}
+/** Ticks from 0 up to at least `max`. The top tick is rounded UP to the next
+ *  step so the scale always contains the data - otherwise the largest bar or
+ *  point renders outside the plot area. */
+function niceTicks(max, count = 4) {
+  if (!(max > 0)) return { ticks: [0], step: 1, top: 1 };
+  const raw = max / count;
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const step = [1, 2, 2.5, 5, 10].map(m => m * mag).find(s => s >= raw) || 10 * mag;
+  const top = Math.ceil(max / step - 1e-9) * step;
+  const ticks = [];
+  for (let i = 0; i * step <= top + step * 1e-9; i++) ticks.push(+(i * step).toPrecision(12));
+  return { ticks, step, top: +top.toPrecision(12) };
+}
+/** Decimal places implied by a tick step, so an axis never prints 0.0 four
+ *  times because the values are all smaller than its own precision. */
+function axisFmt(step) {
+  const d = Math.max(0, Math.min(6, -Math.floor(Math.log10(step)) + (step < 1 ? 0 : 0)));
+  return v => v.toFixed(d);
+}
+function kFmt(v) {
+  if (v === 0) return "0";
+  if (Math.abs(v) >= 1000) return (v / 1000).toFixed(v % 1000 === 0 ? 0 : 1) + "k";
+  return String(Math.round(v));
+}
+function emptyNote(host, msg) {
+  const d = document.createElement("div");
+  d.style.cssText = "padding:48px 12px; text-align:center; color:var(--muted); font-size:12.5px;";
+  d.textContent = msg;
+  host.appendChild(d);
+}
+
+// ---------- tooltip ----------
+const tip = document.getElementById("tip");
+function showTip(evt, title, rows) {
+  tip.innerHTML = `<div class="tt">${title}</div>` +
+    rows.map(r => `<div class="tr">${r}</div>`).join("");
+  tip.style.opacity = "1";
+  moveTip(evt);
+}
+function moveTip(evt) {
+  const pad = 14, r = tip.getBoundingClientRect();
+  let x = evt.clientX + pad, y = evt.clientY + pad;
+  if (x + r.width > innerWidth - 8) x = evt.clientX - r.width - pad;
+  if (y + r.height > innerHeight - 8) y = evt.clientY - r.height - pad;
+  tip.style.left = x + "px"; tip.style.top = y + "px";
+}
+function hideTip() { tip.style.opacity = "0"; }
+function attachTip(node, title, rows) {
+  node.addEventListener("mouseenter", e => showTip(e, title, rows));
+  node.addEventListener("mousemove", moveTip);
+  node.addEventListener("mouseleave", hideTip);
+}
+
+// ---------- legend ----------
+function legendFor(arms, host) {
+  const d = document.createElement("div");
+  d.className = "legend";
+  d.innerHTML = arms.map(a =>
+    `<span class="item"><span class="swatch" style="background:${armColor(a)}"></span>${a}</span>`
+  ).join("");
+  host.appendChild(d);
+}
+
+// ---------- grouped bar ----------
+function groupedBar(hostId, { groups, arms, value, fmt, fmtAxis, overlay, yTitle,
+                              width = 760, empty = "no data" }) {
+  const host = document.getElementById(hostId);
+  host.innerHTML = "";
+  legendFor(arms, host);
+  const holder = document.createElement("div");
+  host.appendChild(holder);
+
+  const rawMax = Math.max(0, ...groups.flatMap(g => arms.map(a => value(a, g) || 0)),
+                             ...(overlay ? groups.flatMap(g => arms.map(a => overlay(a, g) || 0)) : []));
+  if (rawMax <= 0) { emptyNote(holder, empty); return; }
+
+  const W = width, H = 300, M = { t: 18, r: 12, b: 52, l: 56 };
+  const iw = W - M.l - M.r, ih = H - M.t - M.b;
+  const s = svgRoot(holder, W, H);
+  s.setAttribute("aria-label", yTitle);
+
+  const { ticks, step, top } = niceTicks(rawMax);
+  const fa = fmtAxis || axisFmt(step);
+  const y = v => M.t + ih - (v / top) * ih;
+
+  for (const t of ticks) {
+    el("line", { class: "grid-line", x1: M.l, x2: M.l + iw, y1: y(t), y2: y(t) }, s);
+    const lb = el("text", { class: "tick tab", x: M.l - 8, y: y(t) + 4, "text-anchor": "end" }, s);
+    lb.textContent = fa(t);
+  }
+  el("line", { class: "axis-line", x1: M.l, x2: M.l + iw, y1: y(0), y2: y(0) }, s);
+
+  const gw = iw / groups.length;
+  const BAND = Math.min(gw * 0.72, 150);
+  const GAP = 2;                                  // 2px surface gap between bars
+  const bw = (BAND - GAP * (arms.length - 1)) / arms.length;
+
+  groups.forEach((g, gi) => {
+    const gx = M.l + gi * gw + (gw - BAND) / 2;
+    arms.forEach((a, ai) => {
+      const v = value(a, g) || 0;
+      const x = gx + ai * (bw + GAP);
+      const h = Math.max(0, y(0) - y(v));
+      el("path", { d: barPath(x, y(v), bw, h), fill: armColor(a) }, s);
+
+      const ov = overlay ? overlay(a, g) : null;
+
+      // Direct value label — mandatory relief for the sub-3:1 light aqua slot.
+      // Sits above the p95 tick when there is one, so the two never collide.
+      const labY = Math.min(y(v), ov > 0 ? y(ov) : Infinity) - 6;
+      const lab = el("text", {
+        class: "dlabel", x: x + bw / 2, y: Math.max(11, labY), "text-anchor": "middle",
+      }, s);
+      lab.textContent = fmt(v);
+
+      if (ov != null && ov > 0) {
+        el("line", {
+          x1: x, x2: x + bw, y1: y(ov), y2: y(ov),
+          stroke: "var(--text-primary)", "stroke-width": 2, "stroke-linecap": "round",
+          opacity: 0.55,
+        }, s);
+      }
+
+      const hit = el("rect", { class: "hit", x, y: M.t, width: bw, height: ih }, s);
+      const rows = [fmt(v)];
+      if (ov != null) rows.push(`p95 ${fmt(ov)}`);
+      attachTip(hit, `${a} · ${g}`, rows);
+    });
+
+    // Wrap the group label onto two lines when the band is too narrow for it,
+    // rather than letting adjacent labels collide.
+    const words = g.replace(/_/g, " ").split(" ");
+    const lines = (words.length > 1 && gw < 7.2 * g.length)
+      ? [words[0], words.slice(1).join(" ")] : [words.join(" ")];
+    lines.forEach((line, li) => {
+      const gl = el("text", {
+        class: "glabel", x: M.l + gi * gw + gw / 2,
+        y: H - M.b + 20 + li * 13, "text-anchor": "middle",
+      }, s);
+      gl.textContent = line;
+    });
+  });
+}
+
+// ---------- distribution small multiples ----------
+function distribution(hostId, runs, arms) {
+  const host = document.getElementById(hostId);
+  host.innerHTML = "";
+  legendFor(arms, host);
+  const holder = document.createElement("div");
+  host.appendChild(holder);
+
+  const byArm = {};
+  let maxCalls = 1;
+  for (const a of arms) byArm[a] = {};
+  for (const r of runs) {
+    if (!byArm[r.arm]) continue;
+    byArm[r.arm][r.llm_calls] = (byArm[r.arm][r.llm_calls] || 0) + 1;
+    maxCalls = Math.max(maxCalls, r.llm_calls);
+  }
+  const maxCount = Math.max(1, ...arms.flatMap(a => Object.values(byArm[a])));
+
+  const PW = 760 / arms.length, PH = 210, M = { t: 16, r: 14, b: 44, l: 44 };
+  const s = svgRoot(holder, 760, PH + 26);
+
+  const yScale = niceTicks(maxCount, 3);
+  arms.forEach((a, ai) => {
+    const ox = ai * PW;
+    const iw = PW - M.l - M.r, ih = PH - M.t - M.b;
+    const y = v => M.t + ih - (v / yScale.top) * ih;
+    const bwFull = iw / (maxCalls + 1);
+
+    for (const t of yScale.ticks) {
+      el("line", { class: "grid-line", x1: ox + M.l, x2: ox + M.l + iw, y1: y(t), y2: y(t) }, s);
+      if (ai === 0) {
+        const lb = el("text", { class: "tick tab", x: ox + M.l - 7, y: y(t) + 4, "text-anchor": "end" }, s);
+        lb.textContent = t;
+      }
+    }
+    el("line", { class: "axis-line", x1: ox + M.l, x2: ox + M.l + iw, y1: y(0), y2: y(0) }, s);
+
+    for (let c = 0; c <= maxCalls; c++) {
+      const n = byArm[a][c] || 0;
+      if (!n) continue;
+      const x = ox + M.l + c * bwFull + 1;
+      const w = Math.max(2, bwFull - 2);
+      el("path", { d: barPath(x, y(n), w, y(0) - y(n)), fill: armColor(a) }, s);
+      const hit = el("rect", { class: "hit", x, y: M.t, width: w, height: ih }, s);
+      attachTip(hit, `${a} · ${c} LLM call${c === 1 ? "" : "s"}`,
+                [`${n} question${n === 1 ? "" : "s"}`,
+                 `${(100 * n / runs.filter(r => r.arm === a).length).toFixed(1)}% of runs`]);
+    }
+    for (let c = 0; c <= maxCalls; c += Math.ceil((maxCalls + 1) / 6)) {
+      const tk = el("text", {
+        class: "tick tab", x: ox + M.l + c * bwFull + bwFull / 2,
+        y: PH - M.b + 18, "text-anchor": "middle",
+      }, s);
+      tk.textContent = c;
+    }
+    const ttl = el("text", { class: "glabel", x: ox + M.l, y: PH - M.b + 36 }, s);
+    ttl.textContent = `${a} — LLM calls per question`;
+  });
+}
+
+// ---------- frontier scatter ----------
+function frontier(hostId, cells, arms) {
+  const host = document.getElementById(hostId);
+  host.innerHTML = "";
+  legendFor(arms, host);
+  const holder = document.createElement("div");
+  host.appendChild(holder);
+
+  const W = 420, H = 300, M = { t: 14, r: 16, b: 46, l: 50 };
+  const iw = W - M.l - M.r, ih = H - M.t - M.b;
+  const s = svgRoot(holder, W, H);
+
+  const xs = niceTicks(Math.max(1e-9, ...cells.map(c => c.tokens_mean)), 4);
+  const ys = niceTicks(Math.max(0.05, ...cells.map(c => c.em)), 4);
+  const X = v => M.l + (v / xs.top) * iw;
+  const Y = v => M.t + ih - (v / ys.top) * ih;
+  const yfa = axisFmt(ys.step);
+
+  for (const t of ys.ticks) {
+    el("line", { class: "grid-line", x1: M.l, x2: M.l + iw, y1: Y(t), y2: Y(t) }, s);
+    const lb = el("text", { class: "tick tab", x: M.l - 8, y: Y(t) + 4, "text-anchor": "end" }, s);
+    lb.textContent = yfa(t);
+  }
+  for (const t of xs.ticks) {
+    const lb = el("text", { class: "tick tab", x: X(t), y: H - M.b + 18, "text-anchor": "middle" }, s);
+    lb.textContent = kFmt(t);
+  }
+  el("line", { class: "axis-line", x1: M.l, x2: M.l + iw, y1: Y(0), y2: Y(0) }, s);
+  const xl = el("text", { class: "glabel", x: M.l + iw / 2, y: H - 6, "text-anchor": "middle" }, s);
+  xl.textContent = "mean tokens per question";
+  const yl = el("text", {
+    class: "glabel", x: 0, y: 0, "text-anchor": "middle",
+    transform: `translate(13,${M.t + ih / 2}) rotate(-90)`,
+  }, s);
+  yl.textContent = "exact match";
+
+  for (const c of cells) {
+    // 2px surface ring keeps overlapping points separable.
+    el("circle", {
+      cx: X(c.tokens_mean), cy: Y(c.em), r: 6,
+      fill: armColor(c.arm), stroke: "var(--surface-1)", "stroke-width": 2,
+    }, s);
+    const hit = el("circle", { class: "hit", cx: X(c.tokens_mean), cy: Y(c.em), r: 11 }, s);
+    attachTip(hit, `${c.arm} · ${c.condition}`, [
+      `EM ${c.em.toFixed(3)} · F1 ${c.f1.toFixed(3)}`,
+      `${Math.round(c.tokens_mean)} tokens/question`,
+      `${c.llm_calls_mean.toFixed(2)} LLM calls`,
+    ]);
+  }
+}
+
+// ---------- termination stacked bars ----------
+function termination(hostId, cells, arms) {
+  const host = document.getElementById(hostId);
+  host.innerHTML = "";
+  const keys = [...new Set(cells.flatMap(c => Object.keys(c.terminated || {})))]
+    .sort((a, b) => Object.keys(TERM_STYLE).indexOf(a) - Object.keys(TERM_STYLE).indexOf(b));
+
+  const lg = document.createElement("div");
+  lg.className = "legend";
+  lg.innerHTML = keys.map(k => {
+    const st = TERM_STYLE[k] || { color: "var(--muted)", label: k, mark: "•" };
+    return `<span class="item"><span class="swatch" style="background:${st.color}"></span>${st.mark} ${st.label}</span>`;
+  }).join("");
+  host.appendChild(lg);
+  const holder = document.createElement("div");
+  host.appendChild(holder);
+
+  const totals = {};
+  for (const a of arms) totals[a] = {};
+  for (const c of cells) {
+    for (const [k, v] of Object.entries(c.terminated || {})) {
+      totals[c.arm][k] = (totals[c.arm][k] || 0) + v;
+    }
+  }
+
+  const W = 420, rowH = 46, M = { t: 10, r: 14, b: 26, l: 74 };
+  const H = M.t + arms.length * rowH + M.b;
+  const s = svgRoot(holder, W, H);
+  const iw = W - M.l - M.r;
+
+  arms.forEach((a, i) => {
+    const total = Object.values(totals[a]).reduce((x, y) => x + y, 0) || 1;
+    const y0 = M.t + i * rowH + 8;
+    const bh = 22;
+    let x = M.l;
+    keys.forEach(k => {
+      const v = totals[a][k] || 0;
+      if (!v) return;
+      const w = (v / total) * iw;
+      const st = TERM_STYLE[k] || { color: "var(--muted)", label: k, mark: "•" };
+      el("rect", {
+        x, y: y0, width: Math.max(0, w - 2), height: bh, rx: 3, fill: st.color,
+      }, s);
+      const hit = el("rect", { class: "hit", x, y: y0, width: Math.max(0, w - 2), height: bh }, s);
+      attachTip(hit, `${a} · ${st.label}`,
+                [`${v} of ${total} runs`, `${(100 * v / total).toFixed(1)}%`]);
+      x += w;
+    });
+    const lb = el("text", { class: "glabel", x: M.l - 10, y: y0 + 15, "text-anchor": "end" }, s);
+    lb.textContent = a;
+    const ans = totals[a].answered || 0;
+    const pc = el("text", { class: "dlabel", x: M.l, y: y0 + bh + 14 }, s);
+    pc.textContent = `${(100 * ans / total).toFixed(0)}% terminated cleanly`;
+  });
+}
+
+// ---------- head-to-head ----------
+function headToHead(hostId, pairs) {
+  const host = document.getElementById(hostId);
+  host.innerHTML = "";
+  if (!pairs || !pairs.length) { emptyNote(host, "no paired runs to compare"); return; }
+
+  const maxDisc = Math.max(1, ...pairs.map(p => Math.max(p.only_a, p.only_b)));
+  // Left margin has to fit "distractor heavy: hybrid vs workflow" at 12px.
+  const W = 760, ROW = 34, M = { l: 252, r: 132 };
+  const half = (W - M.l - M.r) / 2;
+  const mid = M.l + half;
+  const H = pairs.length * ROW + 34;
+  const s = svgRoot(host, W, H);
+
+  // Centre reference line — the "no difference" position.
+  el("line", { class: "axis-line", x1: mid, x2: mid, y1: 6, y2: H - 28 }, s);
+  const cl = el("text", { class: "tick", x: mid, y: H - 14, "text-anchor": "middle" }, s);
+  cl.textContent = "← wins for left arm  ·  no difference  ·  wins for right arm →";
+
+  pairs.forEach((p, i) => {
+    const y = 10 + i * ROW;
+    const bh = 16;
+    const wa = (p.only_a / maxDisc) * half;
+    const wb = (p.only_b / maxDisc) * half;
+
+    // Left arm's exclusive wins grow leftward, right arm's rightward. A 2px
+    // gap at the centre keeps the two fills from reading as one bar.
+    if (wa > 0) {
+      el("rect", { x: mid - wa, y, width: Math.max(1, wa - 1), height: bh,
+                   rx: 3, fill: armColor(p.arm_a) }, s);
+    }
+    if (wb > 0) {
+      el("rect", { x: mid + 1, y, width: Math.max(1, wb - 1), height: bh,
+                   rx: 3, fill: armColor(p.arm_b) }, s);
+    }
+
+    const lbl = el("text", { class: "glabel", x: M.l - 12, y: y + 12, "text-anchor": "end" }, s);
+    lbl.textContent = `${p.condition.replace(/_/g, " ")}: ${p.arm_a} vs ${p.arm_b}`;
+
+    const sig = p.p_value < 0.05;
+    const stat = el("text", {
+      class: "dlabel", x: W - M.r + 10, y: y + 12,
+      fill: sig ? "var(--text-primary)" : "var(--muted)",
+    }, s);
+    stat.textContent =
+      `${p.only_a}–${p.only_b}  ·  p=${p.p_value.toFixed(3)}${sig ? " *" : ""}`;
+
+    const hit = el("rect", { class: "hit", x: M.l, y, width: W - M.l - M.r, height: bh }, s);
+    attachTip(hit, `${p.condition} — ${p.arm_a} vs ${p.arm_b}`, [
+      `both correct: ${p.both_correct}`,
+      `${p.arm_a} only: ${p.only_a}`,
+      `${p.arm_b} only: ${p.only_b}`,
+      `neither: ${p.neither}`,
+      `disagreed on ${(100 * p.disagreement_rate).toFixed(0)}% of ${p.n}`,
+      `exact McNemar p = ${p.p_value.toFixed(4)}`,
+    ]);
+  });
+}
+
+function renderByArm(rows) {
+  const host = document.getElementById("armHost");
+  host.innerHTML = "";
+  if (!rows || !rows.length) { emptyNote(host, "no runs"); return; }
+  const order = ARM_ORDER.filter(a => rows.some(r => r.arm === a));
+  const sorted = order.map(a => rows.find(r => r.arm === a));
+
+  // best = lowest, except accuracy where best = highest
+  const cols = [
+    ["option", r => `<span class="swatch" style="display:inline-block;background:${armColor(r.arm)};margin-right:6px"></span>${r.arm}`, null],
+    ["n", r => r.n, null],
+    ["EM", r => r.em.toFixed(3), "max"],
+    ["F1", r => r.f1.toFixed(3), "max"],
+    ["LLM calls", r => r.llm_calls_mean.toFixed(2), "min"],
+    ["calls p95", r => r.llm_calls_p95.toFixed(0), "min"],
+    ["calls max", r => r.llm_calls_max, "min"],
+    ["tokens", r => Math.round(r.tokens_mean), "min"],
+    ["tokens p95", r => Math.round(r.tokens_p95), "min"],
+    ["tail", r => r.tokens_p95_over_mean.toFixed(1) + "×", "min"],
+    ["s/call", r => r.latency_per_call_p50.toFixed(2), "min"],
+    ["$/correct", r => r.cost_per_correct == null ? "n/a" : r.cost_per_correct.toFixed(5), "min"],
+    ["cost CV", r => r.cost_cv.toFixed(2), "min"],
+    ["clean end", r => (100 * r.clean_termination_rate).toFixed(0) + "%", "max"],
+  ];
+
+  // Mark the best cell per column so the table is scannable without a chart.
+  const bestIdx = cols.map(([, get, dir]) => {
+    if (!dir) return -1;
+    const vals = sorted.map(r => parseFloat(String(get(r)).replace(/[^0-9.\-]/g, "")));
+    if (vals.some(v => Number.isNaN(v))) return -1;
+    const target = dir === "max" ? Math.max(...vals) : Math.min(...vals);
+    return vals.indexOf(target);
+  });
+
+  const t = document.createElement("table");
+  t.className = "data";
+  t.innerHTML =
+    "<thead><tr>" + cols.map(c => `<th>${c[0]}</th>`).join("") + "</tr></thead><tbody>" +
+    sorted.map((r, ri) => "<tr>" + cols.map((c, ci) => {
+      const win = bestIdx[ci] === ri;
+      return `<td${win ? ' style="font-weight:650;color:var(--text-primary)"' : ""}>` +
+             `${c[1](r)}${win ? " ★" : ""}</td>`;
+    }).join("") + "</tr>").join("") +
+    "</tbody>";
+  host.appendChild(t);
+
+  const key = document.createElement("div");
+  key.style.cssText = "margin-top:10px;font-size:12px;color:var(--text-secondary)";
+  key.innerHTML = "★ best in column. Accuracy columns favour higher; cost, " +
+    "variance and latency columns favour lower.";
+  host.appendChild(key);
+}
+
+function renderQType(rows) {
+  const host = document.getElementById("qtypeHost");
+  host.innerHTML = "";
+  const types = [...new Set(rows.map(r => r.question_type))];
+  if (!rows.length || types.length < 2) {
+    document.getElementById("qtypeSection").classList.add("hidden");
+    return;
+  }
+  const arms = ARM_ORDER.filter(a => rows.some(r => r.arm === a));
+  const conds = [...new Set(rows.map(r => r.condition))];
+  const get = (a, c, t) => rows.find(r => r.arm === a && r.condition === c && r.question_type === t);
+
+  const t = document.createElement("table");
+  t.className = "data";
+  t.innerHTML =
+    "<thead><tr><th>condition</th><th>arm</th>" +
+    types.map(ty => `<th>${ty} EM</th><th>${ty} n</th>`).join("") +
+    "<th>gap</th></tr></thead><tbody>" +
+    conds.flatMap(c => arms.map(a => {
+      const cells = types.map(ty => get(a, c, ty));
+      if (!cells.some(Boolean)) return "";
+      const br = get(a, c, "bridge"), cp = get(a, c, "comparison");
+      const gap = (br && cp) ? (br.em - cp.em) : null;
+      return "<tr>" +
+        `<td>${c.replace(/_/g, " ")}</td>` +
+        `<td><span class="swatch" style="display:inline-block;background:${armColor(a)};margin-right:6px"></span>${a}</td>` +
+        cells.map(x => x ? `<td>${x.em.toFixed(3)}</td><td>${x.n}</td>` : "<td>–</td><td>–</td>").join("") +
+        `<td>${gap == null ? "–" : (gap >= 0 ? "+" : "") + gap.toFixed(3)}</td>` +
+        "</tr>";
+    })).join("") +
+    "</tbody>";
+  host.appendChild(t);
+}
+
+// ---------- table ----------
+function renderTable(cells) {
+  const cols = [
+    ["arm", c => c.arm], ["condition", c => c.condition.replace(/_/g, " ")],
+    ["n", c => c.n],
+    ["EM", c => c.em.toFixed(3)], ["F1", c => c.f1.toFixed(3)],
+    ["LLM calls", c => c.llm_calls_mean.toFixed(2)],
+    ["calls p95", c => c.llm_calls_p95.toFixed(0)],
+    ["tokens", c => Math.round(c.tokens_mean)],
+    ["tokens p95", c => Math.round(c.tokens_p95)],
+    ["lat p50 (s)", c => c.latency_p50.toFixed(2)],
+    ["lat p95 (s)", c => c.latency_p95.toFixed(2)],
+    ["cost/correct", c => c.cost_per_correct == null ? "n/a" : c.cost_per_correct.toFixed(5)],
+    ["cost CV", c => c.cost_cv.toFixed(2)],
+    ["stall %", c => (100 * c.nonterminating_rate).toFixed(1)],
+  ];
+  const t = document.createElement("table");
+  t.className = "data";
+  t.innerHTML =
+    "<thead><tr>" + cols.map(c => `<th>${c[0]}</th>`).join("") + "</tr></thead><tbody>" +
+    cells.map(c => "<tr>" + cols.map(col => `<td>${col[1](c)}</td>`).join("") + "</tr>").join("") +
+    "</tbody>";
+  const host = document.getElementById("tableHost");
+  host.innerHTML = "";
+  host.appendChild(t);
+}
+
+// ---------- KPIs ----------
+function kpis(summary) {
+  const host = document.getElementById("kpis");
+  const find = (a, c) => summary.cells.find(x => x.arm === a && x.condition === c);
+  const out = [];
+
+  const wfC = find("workflow", "clean"), rxC = find("react", "clean");
+  if (wfC && rxC) {
+    const ratio = rxC.tokens_mean / Math.max(1, wfC.tokens_mean);
+    out.push({
+      label: "Loop token cost, clean",
+      value: `${ratio.toFixed(1)}×`,
+      cmp: `${Math.round(rxC.tokens_mean)} vs ${Math.round(wfC.tokens_mean)} tokens/question`,
+    });
+  }
+  const wfF = find("workflow", "flaky_tools"), rxF = find("react", "flaky_tools");
+  if (wfF && rxF) {
+    const d = rxF.em - wfF.em;
+    out.push({
+      label: "EM gap under flaky tools",
+      value: `${d >= 0 ? "+" : ""}${(100 * d).toFixed(1)} pts`,
+      cmp: `loop ${rxF.em.toFixed(3)} vs workflow ${wfF.em.toFixed(3)}`,
+    });
+  }
+  const allWf = summary.cells.filter(c => c.arm === "workflow");
+  const allRx = summary.cells.filter(c => c.arm === "react");
+  if (allWf.length && allRx.length) {
+    const cv = a => a.reduce((s, c) => s + c.cost_cv, 0) / a.length;
+    out.push({
+      label: "Cost predictability (CV)",
+      value: `${cv(allWf).toFixed(2)} / ${cv(allRx).toFixed(2)}`,
+      cmp: "workflow / loop — lower is more forecastable",
+    });
+    const stall = a => a.reduce((s, c) => s + c.nonterminating_rate * c.n, 0) /
+                       Math.max(1, a.reduce((s, c) => s + c.n, 0));
+    out.push({
+      label: "Loop runs that never finished",
+      value: `${(100 * stall(allRx)).toFixed(1)}%`,
+      cmp: `workflow ${(100 * stall(allWf)).toFixed(1)}% — structurally cannot stall`,
+    });
+  }
+
+  host.innerHTML = out.map(k => `
+    <div class="kpi">
+      <div class="label">${k.label}</div>
+      <div class="value">${k.value}</div>
+      <div class="cmp">${k.cmp}</div>
+    </div>`).join("");
+}
+
+// ---------- trace explorer ----------
+function initTraces(runs) {
+  const condPick = document.getElementById("condPick");
+  const qPick = document.getElementById("qPick");
+  const conds = [...new Set(runs.map(r => r.condition))];
+  condPick.innerHTML = conds.map(c => `<option value="${c}">${c.replace(/_/g, " ")}</option>`).join("");
+
+  function fillQuestions() {
+    const c = condPick.value;
+    const seen = new Map();
+    for (const r of runs) {
+      if (r.condition === c && !seen.has(r.question_id)) seen.set(r.question_id, r.question);
+    }
+    qPick.innerHTML = [...seen.entries()].slice(0, 200)
+      .map(([id, q]) => `<option value="${id}">${q.length > 110 ? q.slice(0, 110) + "…" : q}</option>`)
+      .join("");
+    draw();
+  }
+  function draw() {
+    const host = document.getElementById("traces");
+    const sel = runs.filter(r => r.condition === condPick.value && r.question_id === qPick.value);
+    if (!sel.length) { host.innerHTML = ""; return; }
+    const order = ARM_ORDER.filter(a => sel.some(r => r.arm === a));
+    host.innerHTML = order.map(a => {
+      const r = sel.find(x => x.arm === a);
+      const st = TERM_STYLE[r.terminated] || { color: "var(--muted)", label: r.terminated, mark: "•" };
+      const correct = (r.scores && r.scores.em) ? 1 : 0;
+      return `
+      <div class="tracecol">
+        <div class="tracehead">
+          <span class="swatch" style="background:${armColor(a)}"></span>
+          <span class="nm">${a}</span>
+          <span class="meta">${r.llm_calls} calls · ${r.total_tokens} tok</span>
+        </div>
+        ${r.steps.map(s => `
+          <div class="step">
+            <div class="lbl">${s.label.replace(/_/g, " ")}</div>
+            ${s.thought ? `<div class="th">${esc(s.thought)}</div>` : ""}
+            ${s.action ? `<div class="ac">${esc(s.action)}</div>` : ""}
+            ${s.observation ? `<div class="ob">${esc(s.observation)}</div>` : ""}
+            ${s.note ? `<div class="nt">${esc(s.note)}</div>` : ""}
+          </div>`).join("")}
+        <div class="verdict" style="border-top:1px solid var(--border)">
+          <span class="pill" style="background:${correct ? "var(--good)" : "var(--critical)"}">
+            ${correct ? "✓ correct" : "✗ wrong"}
+          </span>
+          <span style="color:var(--text-secondary)">
+            <strong style="color:var(--text-primary)">${esc(r.predicted_answer || "(none)")}</strong>
+            &nbsp;·&nbsp; gold: ${esc(r.gold_answer)}
+          </span>
+          <span class="meta" style="margin-left:auto; color:${st.color}">${st.mark} ${st.label}</span>
+        </div>
+      </div>`;
+    }).join("");
+  }
+  condPick.onchange = fillQuestions;
+  qPick.onchange = draw;
+  fillQuestions();
+}
+const esc = s => String(s == null ? "" : s)
+  .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+// ---------- boot ----------
+function render() {
+  const S = SUMMARY, runs = RUNS;
+  const arms = ARM_ORDER.filter(a => S.arms.includes(a));
+  const conds = S.conditions;
+  const cell = (a, c) => S.cells.find(x => x.arm === a && x.condition === c);
+
+  const m = S.meta || {};
+  document.getElementById("meta").innerHTML =
+    `HotpotQA dev-distractor &middot; backend <strong>${m.backend || "?"}</strong>` +
+    ` &middot; model <strong>${esc(m.model || "?")}</strong>` +
+    ` &middot; n=${m.n_per_condition}/condition &times; ${m.repeats} repeat(s)` +
+    ` &middot; ${m.total_runs} runs in ${m.wall_clock_s}s`;
+
+  if (m.backend === "mock") {
+    const b = document.getElementById("pricingNote");
+    b.hidden = false;
+    b.innerHTML = "<strong>Mock backend.</strong> These traces come from a deterministic " +
+      "stub, not a model. The control flow, fault injection and accounting are real; the " +
+      "answers and token counts are not. Re-run with <code class=\"k\">--backend openai</code> for real numbers.";
+  } else if (S.pricing_source === "placeholder") {
+    const b = document.getElementById("pricingNote");
+    b.hidden = false;
+    b.innerHTML = "<strong>Token counts are metered; dollar figures are not.</strong> " +
+      "Costs derive from placeholder rates in <code class=\"k\">pricing.json</code> — " +
+      "replace them with your chargeback rates before quoting cost.";
+  }
+
+  kpis(S);
+  renderByArm(S.by_arm || []);
+  groupedBar("chartEM", {
+    groups: conds, arms, value: (a, c) => cell(a, c)?.em,
+    fmt: v => v.toFixed(2),
+    yTitle: "Exact match by condition",
+    empty: "No correct answers in any cell.",
+  });
+  groupedBar("chartTokens", {
+    groups: conds, arms, value: (a, c) => cell(a, c)?.tokens_mean,
+    overlay: (a, c) => cell(a, c)?.tokens_p95,
+    fmt: kFmt, fmtAxis: kFmt, width: 460,
+    yTitle: "Mean tokens per question by condition",
+  });
+  groupedBar("chartCPC", {
+    groups: conds, arms,
+    value: (a, c) => cell(a, c)?.cost_per_correct ?? 0,
+    fmt: v => "$" + v.toFixed(4),
+    fmtAxis: v => "$" + v.toFixed(v < 0.01 ? 4 : 2),
+    width: 460,
+    yTitle: "Cost per correct answer by condition",
+    empty: "No cost to show — either no answers were correct, or the backend " +
+           "reports zero-cost tokens (mock). Token charts above still apply.",
+  });
+  distribution("chartDist", runs, arms);
+  frontier("chartFrontier", S.cells, arms);
+  termination("chartTerm", S.cells, arms);
+  headToHead("chartH2H", S.pairwise);
+  renderQType(S.by_question_type || []);
+  renderTable(S.cells);
+  initTraces(runs);
+}
+
+document.getElementById("themeToggle").onclick = e => {
+  const dark = document.documentElement.getAttribute("data-theme") === "dark";
+  document.documentElement.setAttribute("data-theme", dark ? "light" : "dark");
+  e.target.setAttribute("aria-pressed", String(!dark));
+  e.target.textContent = dark ? "Dark" : "Light";
+};
+document.getElementById("tableToggle").onclick = e => {
+  const sec = document.getElementById("tableSection");
+  const on = sec.classList.toggle("hidden");
+  e.target.setAttribute("aria-pressed", String(!on));
+};
+
+Promise.all([
+  fetch("../results/summary.json").then(r => r.json()),
+  fetch("../results/runs.json").then(r => r.json()),
+]).then(([s, r]) => { SUMMARY = s; RUNS = r; render(); })
+  .catch(err => {
+    const b = document.getElementById("loadErr");
+    b.hidden = false;
+    b.innerHTML = "<strong>Could not load results.</strong> Serve the repo root over HTTP " +
+      "(<code class=\"k\">python3 -m http.server 8000</code>, then open " +
+      "<code class=\"k\">localhost:8000/viewer/</code>) — opening this file directly with " +
+      "file:// blocks the fetch. Run <code class=\"k\">python -m harness.run</code> first if " +
+      "<code class=\"k\">results/</code> is empty. <br><br>" + esc(err);
+  });
+</script>
+</body>
+</html>

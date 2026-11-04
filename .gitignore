@@ -1,0 +1,35 @@
+# --- secrets: never commit a real credential ---
+.env
+.env.*
+!.env.example
+secrets/
+*.pem
+*.key
+*.p12
+credentials.json
+
+# --- python ---
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+
+# --- data: downloaded on demand, not vendored ---
+#     python -m harness.dataset download
+data/hotpot/
+data/ca-bundle.pem
+
+# --- results ---
+# runs.json and summary.json ARE committed, so the dashboard works on a fresh
+# clone. The timestamped raw sweeps behind them are not.
+results/runs_*.json
+results_chain/runs_*.json
+# scratch from `--out results_mock`, so a mock sweep never lands on the
+# committed live results
+results_mock/
+
+# --- os / editor ---
+.DS_Store
+.idea/
+.vscode/

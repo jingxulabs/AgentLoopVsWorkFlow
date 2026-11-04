@@ -1,0 +1,450 @@
+{
+  "cells": [
+    {
+      "arm": "hybrid",
+      "condition": "chain_deep",
+      "n": 15,
+      "em": 1.0,
+      "f1": 1.0,
+      "llm_calls_mean": 7.6,
+      "llm_calls_p95": 9.0,
+      "llm_calls_max": 10,
+      "steps_mean": 7.6,
+      "tokens_mean": 3704.133333333333,
+      "tokens_p95": 4954.0,
+      "tokens_total": 55562,
+      "cost_mean": 0.00046313333333333333,
+      "cost_p50": 0.0004922,
+      "cost_p95": 0.0006118,
+      "cost_total": 0.006947,
+      "cost_per_correct": 0.00046313333333333333,
+      "latency_mean": 31.45412,
+      "latency_p50": 49.7781,
+      "latency_p95": 52.5084,
+      "cost_cv": 0.23407568234884352,
+      "steps_cv": 0.15789473684210525,
+      "tool_calls_mean": 5.6,
+      "tool_failures_total": 0,
+      "terminated": {
+        "answered": 15
+      },
+      "nonterminating_rate": 0.0
+    },
+    {
+      "arm": "hybrid",
+      "condition": "chain_shallow",
+      "n": 15,
+      "em": 0.9333333333333333,
+      "f1": 0.9333333333333333,
+      "llm_calls_mean": 6.0,
+      "llm_calls_p95": 9.0,
+      "llm_calls_max": 10,
+      "steps_mean": 6.0,
+      "tokens_mean": 2452.2,
+      "tokens_p95": 4741.0,
+      "tokens_total": 36783,
+      "cost_mean": 0.00031752,
+      "cost_p50": 0.00029800000000000003,
+      "cost_p95": 0.0005893000000000001,
+      "cost_total": 0.0047628,
+      "cost_per_correct": 0.00034020000000000003,
+      "latency_mean": 24.034873333333334,
+      "latency_p50": 6.6037,
+      "latency_p95": 54.87,
+      "cost_cv": 0.43937668380280875,
+      "steps_cv": 0.2721655269759087,
+      "tool_calls_mean": 4.0,
+      "tool_failures_total": 0,
+      "terminated": {
+        "answered": 14,
+        "step_limit": 1
+      },
+      "nonterminating_rate": 0.06666666666666667
+    },
+    {
+      "arm": "react",
+      "condition": "chain_deep",
+      "n": 15,
+      "em": 1.0,
+      "f1": 1.0,
+      "llm_calls_mean": 6.533333333333333,
+      "llm_calls_p95": 8.0,
+      "llm_calls_max": 8,
+      "steps_mean": 6.533333333333333,
+      "tokens_mean": 3527.866666666667,
+      "tokens_p95": 4469.0,
+      "tokens_total": 52918,
+      "cost_mean": 0.0004440066666666667,
+      "cost_p50": 0.00047200000000000003,
+      "cost_p95": 0.0005507,
+      "cost_total": 0.0066601,
+      "cost_per_correct": 0.0004440066666666667,
+      "latency_mean": 24.72263333333333,
+      "latency_p50": 7.5338,
+      "latency_p95": 52.1644,
+      "cost_cv": 0.1855965098717806,
+      "steps_cv": 0.13537244042266938,
+      "tool_calls_mean": 5.533333333333333,
+      "tool_failures_total": 0,
+      "terminated": {
+        "answered": 15
+      },
+      "nonterminating_rate": 0.0
+    },
+    {
+      "arm": "react",
+      "condition": "chain_shallow",
+      "n": 15,
+      "em": 0.9333333333333333,
+      "f1": 0.9333333333333333,
+      "llm_calls_mean": 5.2,
+      "llm_calls_p95": 8.0,
+      "llm_calls_max": 8,
+      "steps_mean": 5.2,
+      "tokens_mean": 2468.133333333333,
+      "tokens_p95": 4640.0,
+      "tokens_total": 37022,
+      "cost_mean": 0.0003201333333333334,
+      "cost_p50": 0.0002843,
+      "cost_p95": 0.0005789,
+      "cost_total": 0.004802000000000001,
+      "cost_per_correct": 0.00034300000000000004,
+      "latency_mean": 23.582226666666667,
+      "latency_p50": 7.4449,
+      "latency_p95": 49.1728,
+      "cost_cv": 0.39300601949635744,
+      "steps_cv": 0.2737712372315721,
+      "tool_calls_mean": 4.2,
+      "tool_failures_total": 0,
+      "terminated": {
+        "answered": 15
+      },
+      "nonterminating_rate": 0.0
+    },
+    {
+      "arm": "workflow",
+      "condition": "chain_deep",
+      "n": 15,
+      "em": 0.13333333333333333,
+      "f1": 0.13333333333333333,
+      "llm_calls_mean": 2.0,
+      "llm_calls_p95": 2.0,
+      "llm_calls_max": 2,
+      "steps_mean": 4.0,
+      "tokens_mean": 415.8,
+      "tokens_p95": 426.0,
+      "tokens_total": 6237,
+      "cost_mean": 4.88e-05,
+      "cost_p50": 4.89e-05,
+      "cost_p95": 4.9800000000000004e-05,
+      "cost_total": 0.000732,
+      "cost_per_correct": 0.000366,
+      "latency_mean": 7.875706666666667,
+      "latency_p50": 1.432,
+      "latency_p95": 47.8102,
+      "cost_cv": 0.016546417408349452,
+      "steps_cv": 0.0,
+      "tool_calls_mean": 2.0,
+      "tool_failures_total": 0,
+      "terminated": {
+        "answered": 15
+      },
+      "nonterminating_rate": 0.0
+    },
+    {
+      "arm": "workflow",
+      "condition": "chain_shallow",
+      "n": 15,
+      "em": 0.4666666666666667,
+      "f1": 0.4666666666666667,
+      "llm_calls_mean": 2.0,
+      "llm_calls_p95": 2.0,
+      "llm_calls_max": 2,
+      "steps_mean": 4.0,
+      "tokens_mean": 418.53333333333336,
+      "tokens_p95": 428.0,
+      "tokens_total": 6278,
+      "cost_mean": 4.903333333333334e-05,
+      "cost_p50": 4.940000000000001e-05,
+      "cost_p95": 5.000000000000001e-05,
+      "cost_total": 0.0007355,
+      "cost_per_correct": 0.00010507142857142857,
+      "latency_mean": 3.696473333333333,
+      "latency_p50": 1.5113,
+      "latency_p95": 2.512,
+      "cost_cv": 0.016478900096397773,
+      "steps_cv": 0.0,
+      "tool_calls_mean": 2.0,
+      "tool_failures_total": 0,
+      "terminated": {
+        "answered": 15
+      },
+      "nonterminating_rate": 0.0
+    }
+  ],
+  "arms": [
+    "hybrid",
+    "react",
+    "workflow"
+  ],
+  "conditions": [
+    "chain_deep",
+    "chain_shallow"
+  ],
+  "by_arm": [
+    {
+      "arm": "hybrid",
+      "n": 30,
+      "em": 0.9666666666666667,
+      "f1": 0.9666666666666667,
+      "llm_calls_mean": 6.8,
+      "llm_calls_p95": 10.0,
+      "llm_calls_max": 10,
+      "tokens_mean": 3078.1666666666665,
+      "tokens_p95": 5435.0,
+      "tokens_p95_over_mean": 1.765661378526179,
+      "cost_mean": 0.0003903266666666667,
+      "cost_per_correct": 0.00040378620689655176,
+      "cost_cv": 0.37045422445077314,
+      "latency_per_call_p50": 1.1396943750005448,
+      "tool_calls_mean": 4.8,
+      "tool_failures_total": 0,
+      "clean_termination_rate": 0.9666666666666667,
+      "terminated": {
+        "answered": 29,
+        "step_limit": 1
+      }
+    },
+    {
+      "arm": "react",
+      "n": 30,
+      "em": 0.9666666666666667,
+      "f1": 0.9666666666666667,
+      "llm_calls_mean": 5.866666666666666,
+      "llm_calls_p95": 8.0,
+      "llm_calls_max": 8,
+      "tokens_mean": 2998.0,
+      "tokens_p95": 4685.0,
+      "tokens_p95_over_mean": 1.5627084723148765,
+      "cost_mean": 0.00038207000000000003,
+      "cost_per_correct": 0.0003952448275862069,
+      "cost_cv": 0.3221130030281781,
+      "latency_per_call_p50": 1.147831459002191,
+      "tool_calls_mean": 4.866666666666666,
+      "tool_failures_total": 0,
+      "clean_termination_rate": 1.0,
+      "terminated": {
+        "answered": 30
+      }
+    },
+    {
+      "arm": "workflow",
+      "n": 30,
+      "em": 0.3,
+      "f1": 0.3,
+      "llm_calls_mean": 2.0,
+      "llm_calls_p95": 2.0,
+      "llm_calls_max": 2,
+      "tokens_mean": 417.1666666666667,
+      "tokens_p95": 429.0,
+      "tokens_p95_over_mean": 1.0283659608469835,
+      "cost_mean": 4.8916666666666665e-05,
+      "cost_per_correct": 0.00016305555555555556,
+      "cost_cv": 0.01668393051165206,
+      "latency_per_call_p50": 0.7331856660021003,
+      "tool_calls_mean": 2.0,
+      "tool_failures_total": 0,
+      "clean_termination_rate": 1.0,
+      "terminated": {
+        "answered": 30
+      }
+    }
+  ],
+  "pairwise": [
+    {
+      "condition": "chain_deep",
+      "arm_a": "hybrid",
+      "arm_b": "react",
+      "n": 15,
+      "both_correct": 15,
+      "only_a": 0,
+      "only_b": 0,
+      "neither": 0,
+      "disagreement_rate": 0.0,
+      "net_b_minus_a": 0,
+      "p_value": 1.0,
+      "extra_cost_b": -1.9126666666666654e-05,
+      "cost_per_extra_correct": null
+    },
+    {
+      "condition": "chain_deep",
+      "arm_a": "hybrid",
+      "arm_b": "workflow",
+      "n": 15,
+      "both_correct": 2,
+      "only_a": 13,
+      "only_b": 0,
+      "neither": 0,
+      "disagreement_rate": 0.8666666666666667,
+      "net_b_minus_a": -13,
+      "p_value": 0.000244140625,
+      "extra_cost_b": -0.00041433333333333334,
+      "cost_per_extra_correct": null
+    },
+    {
+      "condition": "chain_deep",
+      "arm_a": "react",
+      "arm_b": "workflow",
+      "n": 15,
+      "both_correct": 2,
+      "only_a": 13,
+      "only_b": 0,
+      "neither": 0,
+      "disagreement_rate": 0.8666666666666667,
+      "net_b_minus_a": -13,
+      "p_value": 0.000244140625,
+      "extra_cost_b": -0.0003952066666666667,
+      "cost_per_extra_correct": null
+    },
+    {
+      "condition": "chain_shallow",
+      "arm_a": "hybrid",
+      "arm_b": "react",
+      "n": 15,
+      "both_correct": 13,
+      "only_a": 1,
+      "only_b": 1,
+      "neither": 0,
+      "disagreement_rate": 0.13333333333333333,
+      "net_b_minus_a": 0,
+      "p_value": 1.0,
+      "extra_cost_b": 2.61333333333333e-06,
+      "cost_per_extra_correct": null
+    },
+    {
+      "condition": "chain_shallow",
+      "arm_a": "hybrid",
+      "arm_b": "workflow",
+      "n": 15,
+      "both_correct": 7,
+      "only_a": 7,
+      "only_b": 0,
+      "neither": 1,
+      "disagreement_rate": 0.4666666666666667,
+      "net_b_minus_a": -7,
+      "p_value": 0.015625,
+      "extra_cost_b": -0.00026848666666666666,
+      "cost_per_extra_correct": null
+    },
+    {
+      "condition": "chain_shallow",
+      "arm_a": "react",
+      "arm_b": "workflow",
+      "n": 15,
+      "both_correct": 7,
+      "only_a": 7,
+      "only_b": 0,
+      "neither": 1,
+      "disagreement_rate": 0.4666666666666667,
+      "net_b_minus_a": -7,
+      "p_value": 0.015625,
+      "extra_cost_b": -0.0002711,
+      "cost_per_extra_correct": null
+    }
+  ],
+  "by_question_type": [
+    {
+      "arm": "hybrid",
+      "condition": "chain_deep",
+      "question_type": "chain",
+      "n": 15,
+      "em": 1.0,
+      "f1": 1.0,
+      "llm_calls_mean": 7.6
+    },
+    {
+      "arm": "hybrid",
+      "condition": "chain_shallow",
+      "question_type": "chain",
+      "n": 15,
+      "em": 0.9333333333333333,
+      "f1": 0.9333333333333333,
+      "llm_calls_mean": 6.0
+    },
+    {
+      "arm": "react",
+      "condition": "chain_deep",
+      "question_type": "chain",
+      "n": 15,
+      "em": 1.0,
+      "f1": 1.0,
+      "llm_calls_mean": 6.533333333333333
+    },
+    {
+      "arm": "react",
+      "condition": "chain_shallow",
+      "question_type": "chain",
+      "n": 15,
+      "em": 0.9333333333333333,
+      "f1": 0.9333333333333333,
+      "llm_calls_mean": 5.2
+    },
+    {
+      "arm": "workflow",
+      "condition": "chain_deep",
+      "question_type": "chain",
+      "n": 15,
+      "em": 0.13333333333333333,
+      "f1": 0.13333333333333333,
+      "llm_calls_mean": 2.0
+    },
+    {
+      "arm": "workflow",
+      "condition": "chain_shallow",
+      "question_type": "chain",
+      "n": 15,
+      "em": 0.4666666666666667,
+      "f1": 0.4666666666666667,
+      "llm_calls_mean": 2.0
+    }
+  ],
+  "router": {
+    "n": 30,
+    "comparison_detection_accuracy": 1.0,
+    "route_counts": {
+      "bridge": 30
+    }
+  },
+  "pricing_source": "placeholder",
+  "pricing_note": "USD per 1M tokens. PLACEHOLDER VALUES - not authoritative. Token counts in the results are metered and real; every dollar figure is derived from this file. Replace these with your provider's current published rates before quoting cost to anyone, or read the token columns instead.",
+  "meta": {
+    "generated_at": "20261025T020806Z",
+    "backend": "openai",
+    "model": "(env default)",
+    "n_per_condition": 15,
+    "repeats": 1,
+    "seed": 0,
+    "arms": [
+      "workflow",
+      "react",
+      "hybrid"
+    ],
+    "conditions": [
+      "chain_shallow",
+      "chain_deep"
+    ],
+    "condition_detail": {
+      "chain_shallow": {
+        "description": "Synthetic successor chains of depth 1 (2 retrievals needed).",
+        "hypothesis": "The control for chain_deep. Depth 1 is exactly what the fixed graph provides, so all three arms should solve these. If the workflow fails here too, the chain task is simply hard and chain_deep proves nothing about depth - this condition is what makes that distinction."
+      },
+      "chain_deep": {
+        "description": "Synthetic successor chains of depth 3-5 (4-6 retrievals needed).",
+        "hypothesis": "The structural case. The workflow performs exactly 2 retrievals, so a depth-4 chain is unreachable for it no matter how good the model or the prompt is - it should score ~0. The loop discovers the depth by following links and should solve most. Hybrid is capped at 4 loop steps, so it should handle depth 3 and start failing by depth 5. This is the one condition where the architecture choice is forced rather than optimised."
+      }
+    },
+    "total_runs": 90,
+    "wall_clock_s": 1730.81,
+    "dataset": "HotpotQA dev-distractor (CC BY-SA 4.0)"
+  }
+}

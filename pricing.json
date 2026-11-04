@@ -1,0 +1,26 @@
+{
+  "_comment": "USD per 1M tokens. PLACEHOLDER VALUES - not authoritative. Token counts in the results are metered and real; every dollar figure is derived from this file. Replace these with your provider's current published rates before quoting cost to anyone, or read the token columns instead.",
+  "_source": "placeholder",
+  "models": {
+    "default": {
+      "prompt": 0.1,
+      "completion": 0.4
+    },
+    "gpt-4o": {
+      "prompt": 2.5,
+      "completion": 10.0
+    },
+    "gpt-4o-mini": {
+      "prompt": 0.15,
+      "completion": 0.6
+    },
+    "gpt-5.2-2025-12-11": {
+      "prompt": 0.1,
+      "completion": 0.4
+    },
+    "mock-deterministic": {
+      "prompt": 0.0,
+      "completion": 0.0
+    }
+  }
+}
