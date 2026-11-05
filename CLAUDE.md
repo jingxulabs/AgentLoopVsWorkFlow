@@ -13,6 +13,7 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 .venv/bin/python tests/test_harness.py          # 33 tests, offline, no key
 .venv/bin/python -m harness.run --backend mock --n 25
 .venv/bin/python serve.py                       # dashboard at :8077
+.venv/bin/python -m harness.grounding --by-condition   # grounded EM (needs the corpus)
 
 # live: standard OpenAI key auth
 export OPENAI_API_KEY=sk-...
@@ -65,30 +66,35 @@ result. It is the cheapest possible fixed pipeline, not a good one. Adding
 `retrieve → extract → retrieve` as a fourth arm is the highest-value open task.
 
 **EM overstates grounded answering, and the loop is the arm most exposed.** A
-correct answer here does not mean the evidence was retrieved. Measured over
-`results/runs.json`, `clean`, 20 questions per arm: of the answers each arm
-scored EM 1.0 on, the gold string was present in *retrieved paragraph text* for
-only 9/10 (workflow), 6/10 (react) and 5/11 (hybrid). The rest came from a title
-in a `(Similar results: …)` trailer, or from nothing retrieved at all — the
-model's prior. The agent arm is worse than the DAG on this because it chooses
-when to stop (`_SYS`: "call finish as soon as you can answer; do not keep
-searching to confirm"), while the DAG always puts four paragraphs in front of
-`synthesize`.
+correct answer here does not mean the evidence was retrieved. `harness/grounding.py`
+scores the stricter thing — correct *and* the gold string present in the paragraph
+text that arm actually had — and over all 300 runs the EM tie does not survive it:
+grounded EM is 0.480 (workflow), 0.357 (react), 0.449 (hybrid), with 3, 15 and 8 of
+each arm's correct answers unevidenced. On `clean` alone the counts are 9/10, 6/10
+and 9/11. The agent arm is worse than the DAG because it chooses when to stop
+(`_SYS`: "call finish as soon as you can answer; do not keep searching to confirm"),
+while the DAG always puts four paragraphs in front of `synthesize` — so part of this
+number is a prompt choice, not an architecture.
 
-The worked case is `5a8756f25542994775f607dc` (gold `7.63×25mm Mauser`): the
-answer sentence lives in the paragraph *titled* `7.63×25mm Mauser`, while the
-`Mauser C96` paragraph names the gun and never mentions ammunition. Workflow
-retrieved `Mauser C96`, `Luger pistol`, `7.65×21mm Parabellum` — neither the
-answer string nor "original cartridge" appears anywhere in its context. React
-read `Mauser C96` twice, saw `7.63×25mm Mauser` ranked first in the
-similar-results trailer, and finished without opening it. Both scored EM 1.0.
+**Count the hybrid's `single` route when scoring grounding.** It calls
+`top_paragraphs` and hands whole paragraphs to `answer_single`, exactly as the
+workflow does, but the trace records only titles. Reading `search` observations
+alone misses those runs and undercounts the arm — that is how the hybrid figure was
+once reported as 5/11 instead of 9/11. `grounding.py` reads titles back out of the
+corpus for any `kind == "tool"` retrieve step, which is also why it needs the
+dataset downloaded.
+
+Three worked cases, all `clean`: `5ae2d8fb55429928c42394fa` (only the loop grounded
+— `decompose` wrote hop 2 blind, guessed "Edwards Air Force Base", and answered with
+the bridge entity); `5adf75e35542993344016c98` (both grounded, DAG cheaper, 483 vs
+697 tokens); and `5a8756f25542994775f607dc`, gold `7.63×25mm Mauser`, where both
+scored EM 1.0 and **neither** read the sentence — the workflow answered from the
+model's knowledge of the C96, and react saw the gold title in a similar-results
+trailer and finished without opening it.
 
 So treat HotpotQA accuracies as **upper bounds on retrieval-grounded
 answering**, never as bridging ability — the invented-entity chains in
-`harness/chain.py` are the only arm comparison memorisation cannot reach. There
-is no guard for this yet; a groundedness check alongside
-`test_chain_answer_is_not_retrievable_without_following_the_chain` is the
-obvious next test.
+`harness/chain.py` are the only arm comparison memorisation cannot reach.
 
 ## Gotchas
 

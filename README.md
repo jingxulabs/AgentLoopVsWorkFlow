@@ -134,10 +134,10 @@ median per-call latency. Dollar figures use placeholder rates — see below.
 **How to read this:** accuracy is a three-way tie (0.520 / 0.520 / 0.540) and
 **none of the 15 paired head-to-head comparisons reached significance** — every
 exact-McNemar p ≥ 0.25 at n=20 per cell. The accuracy column does not
-discriminate between these architectures on this benchmark — and a sizeable
-share of those correct answers were never grounded in retrieved text at all
-(see [a correct answer is not necessarily a retrieved
-one](#known-limitation-a-correct-answer-is-not-necessarily-a-retrieved-one)).
+discriminate between these architectures on this benchmark — and it is also
+generous: scored for retrieved evidence instead of answer strings, the loop
+falls to 0.357 while the workflow holds 0.480 (see [grounded EM, and why the
+accuracy tie is generous](#measured-grounded-em-and-why-the-accuracy-tie-is-generous)).
 The cost columns do,
 and decisively: the workflow uses **2.2× fewer tokens** for the same accuracy,
 and its cost distribution is a near point mass (tail 1.8×, CV 0.31) against the
@@ -208,51 +208,102 @@ requires reading hop 1 before querying hop 2. **A sequential-retrieval workflow
 is the single most valuable fourth arm to add**, and until it exists, read
 "workflow" here as "cheapest possible fixed pipeline", not "best fixed pipeline".
 
-## Known limitation: a correct answer is not necessarily a retrieved one
+## Measured: grounded EM, and why the accuracy tie is generous
 
-EM scores the answer string, not the evidence, and on this benchmark the two
-come apart more often than the accuracy table suggests. Of the answers each arm
-got right on `clean` (20 questions per arm), the gold string was actually
-present in the paragraph text that arm had retrieved:
+EM scores the answer string, not the evidence. On a benchmark built from
+Wikipedia that lets the model's prior count as a win: an arm can retrieve
+nothing useful, answer from memory, and score exactly like an arm that read the
+sentence. `harness/grounding.py` scores the stricter thing — **grounded EM**:
+exact-match correct *and* the gold string present in the paragraph text that arm
+actually put in front of its own model. A title glimpsed in a
+`(Similar results: …)` trailer is a pointer, not evidence, and does not count.
 
-| arm | correct | grounded in retrieved text | answered from a title, or from nothing |
-|---|---|---|---|
-| `workflow` | 10 | 9 | 1 |
-| `react` | 10 | 6 | 4 |
-| `hybrid` | 11 | 5 | 6 |
+```bash
+python -m harness.dataset download       # paragraph bodies are not in the trace
+python -m harness.grounding              # the table below
+python -m harness.grounding --by-condition --json
+```
 
-The remainder were answered from a paragraph *title* glimpsed in a
-`(Similar results: …)` trailer, or from nothing retrieved at all — the model's
-own knowledge of a well-known Wikipedia fact.
+Over all 300 runs — 98 of the 100 paired cells, two comparison questions having
+yes/no gold answers that no paragraph can contain, dropped for every arm so the
+pairing survives:
+
+| arm | EM | grounded EM | correct | of those, unevidenced |
+|---|---|---|---|---|
+| `workflow` | 0.510 | **0.480** | 50 | 3 |
+| `react` | 0.510 | **0.357** | 50 | 15 |
+| `hybrid` | 0.531 | **0.449** | 52 | 8 |
+
+The three-way EM tie is real and it does not survive the second column. All
+three arms answer about the same number of questions correctly; the loop reaches
+a quarter fewer of them through its own retrieval. 15 of its 50 correct answers
+came from a trailer title or from nothing retrieved at all, against 3 of the
+workflow's.
 
 **The agent loop is the arm most exposed**, which is the opposite of the
 intuitive reading. It chooses when to stop — its prompt says "call `finish` as
 soon as you can answer; do not keep searching to confirm an answer you already
-have" — while the fixed DAG always puts four paragraphs in front of
-`synthesize`, needed or not.
+have" — and a model that already knows the answer satisfies that after one
+search that returned nothing useful. The fixed DAG has no early exit: it runs
+both retrievals every time and puts four paragraphs in front of `synthesize`,
+so when it is right it is usually right for the recorded reason. Part of this
+number is therefore a prompt choice wearing an architecture's clothes, and it
+is the one result here where the two are hard to separate.
 
-A worked example, question `5a8756f25542994775f607dc`: *"What pistol cartridge
-was the original cartridge for the service pistol produced by a German arms
-manufacturer between 1896 and 1937?"*, gold `7.63×25mm Mauser`. The answer
-sentence lives in the paragraph *titled* `7.63×25mm Mauser`; the `Mauser C96`
-paragraph identifies the gun and never mentions ammunition.
+**What this is not.** Not significant per condition: on grounded correctness
+every per-condition exact-McNemar p is ≥ 0.22, the same verdict the plain-EM
+tests returned. Pooled over all five conditions the workflow is grounded-correct
+where the loop is not 21 times against 9 (p = 0.043), but those 100 cells reuse
+only 30 distinct questions across five perturbations, so they are not
+independent and that p-value is not a licence. Take the direction — the workflow
+leads in four of the five conditions and ties in the fifth — and take the size
+of the gap between the two columns as the reason to distrust an accuracy tie on
+a benchmark made of facts a model may already know.
 
-- `workflow` retrieved `Mauser C96`, `Luger pistol` and `7.65×21mm Parabellum`.
-  Neither the answer string nor the phrase "original cartridge" occurs anywhere
-  in what `synthesize` was given. It answered correctly regardless — that node's
-  prompt ends *"if the paragraphs do not contain the answer, reply with your
-  single best guess anyway"*.
-- `react` read `Mauser C96` twice, saw `7.63×25mm Mauser` ranked first in the
-  similar-results trailer — the pointer its architecture exists to follow — and
-  called `finish` without opening it.
+### Two worked pairs from `results/runs.json`
 
-Both scored EM 1.0. Read the HotpotQA accuracies, then, as **upper bounds on
-retrieval-grounded answering** rather than as multi-hop reasoning. The
-variable-depth chains above use invented entity names precisely so memorisation
-cannot reach them; that is the arm comparison to trust. There is no automated
-guard for this yet — a groundedness check alongside
-`test_chain_answer_is_not_retrievable_without_following_the_chain` is the
-obvious next test.
+Both are `clean`, both quoted unedited, and in both the winning answer was read
+rather than recalled.
+
+**Both arms grounded; the DAG cheaper.** `5adf75e35542993344016c98`, *"What
+American horror film directed by Sidney J. Furie was based off an alleged
+haunting which occurred in 1974 at Culver City, California?"*, gold
+`The Entity`. The question's own wording retrieves the gold paragraph, so there
+is no second hop to take. `workflow` ran both retrievals, got both gold
+paragraphs including the sentence naming Furie, and answered in 483 tokens.
+`react` searched once, matched the haunting to a film of the same name, and
+finished in 697 tokens without ever reading the director sentence. Cheaper
+*and* better evidenced — most of the distractor split looks like this, which is
+why the workflow's EM is competitive at all.
+
+**Only the loop grounded.** `5ae2d8fb55429928c42394fa`, *"Who was the base where
+the 413th Flight Test Group is stationed named after?"*, gold
+`Brig Gen Augustine Warner Robins`. Here hop 2 is a function of hop 1's result.
+`decompose` had to write it blind and produced *"What is the namesake of Edwards
+Air Force Base"* — a base supplied by the model's prior — so the retrieval
+returned Edwards paragraphs (one of which really does name the 413th, so the
+wrong trail reads as on-topic), the string `Augustine` never entered the
+context, and `synthesize` answered `Robins Air Force Base`: the bridge entity
+itself, EM 0, F1 0.22. `react` searched the unit, read "stationed at Robins Air
+Force Base", searched that, read "named in honor of Brig Gen Augustine Warner
+Robins", and finished — 1,162 tokens against 594 for the one edge the DAG does
+not have. Note which arm the model's knowledge hurt: prior knowledge does not
+fail neutrally across the two architectures, which is why a comparison run on
+facts the model may know is not a comparison of control flow.
+
+A third pair, where EM scored both arms correct and **neither** was grounded,
+is the reason this section exists: `5a8756f25542994775f607dc`, gold
+`7.63×25mm Mauser`. The workflow's hop 2 went after the wrong pistol and it
+answered correctly anyway, out of the model's knowledge of the C96 — its prompt
+ends *"if the paragraphs do not contain the answer, reply with your single best
+guess anyway"*. `react` saw `7.63×25mm Mauser` ranked first in a trailer — the
+pointer its architecture exists to follow — and called `finish` without opening
+it.
+
+Read the HotpotQA accuracies, then, as **upper bounds on retrieval-grounded
+answering** rather than as multi-hop reasoning. The variable-depth chains above
+use invented entity names precisely so memorisation cannot reach them; that is
+the arm comparison to trust.
 
 ## Reading latency: a measured caveat
 
